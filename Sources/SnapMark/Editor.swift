@@ -5,7 +5,7 @@ import SnapMarkCore
 final class EditorController {
     let model: EditorModel
     let window: KeyPanel
-    let toolbar: KeyPanel
+    let toolbar: NSVisualEffectView
     let canvas: CanvasView
     var onCopy: (() -> Void)?
     var onSave: (() -> Void)?
@@ -21,28 +21,27 @@ final class EditorController {
         canvas = CanvasView(model: model,frame: CGRect(origin: .zero,size: screen.frame.size),placement: placement,background: background)
         window.contentView = canvas
         let width = min(740,screen.frame.width-24)
-        toolbar = KeyPanel(contentRect: CGRect(x: 0,y: 0,width: width,height: 104),styleMask: [.borderless],backing: .buffered,defer: false)
-        toolbar.level = .screenSaver; toolbar.isOpaque = false; toolbar.backgroundColor = .clear; toolbar.hasShadow = true
-        toolbar.isReleasedWhenClosed = false; toolbar.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary]
-        let effect = NSVisualEffectView(frame: CGRect(x: 0,y: 0,width: width,height: 104))
-        effect.material = .popover; effect.blendingMode = .behindWindow; effect.state = .active
-        effect.wantsLayer = true; effect.layer?.cornerRadius = 14; effect.layer?.masksToBounds = true
+        toolbar = NSVisualEffectView(frame: CGRect(x: 0,y: 0,width: width,height: 104))
+        toolbar.material = .popover; toolbar.blendingMode = .withinWindow; toolbar.state = .active
+        toolbar.wantsLayer = true; toolbar.layer?.cornerRadius = 14; toolbar.layer?.masksToBounds = true
+        toolbar.layer?.borderWidth = 0.5; toolbar.layer?.borderColor = NSColor.separatorColor.cgColor
         let host = NSHostingView(rootView: EditorToolbar(model: model,controller: self))
-        host.frame = effect.bounds; host.autoresizingMask = [.width,.height]; effect.addSubview(host); toolbar.contentView = effect
-        let x = min(screen.frame.maxX-width-12,max(screen.frame.minX+12,screen.frame.minX+placement.midX-width/2))
-        let below = screen.frame.maxY-placement.maxY-116
-        let y = below >= screen.frame.minY+40 ? below : min(screen.frame.maxY-120,screen.frame.maxY-placement.minY+12)
-        toolbar.setFrameOrigin(CGPoint(x: x,y: max(screen.frame.minY+40,y)))
+        host.frame = toolbar.bounds; host.autoresizingMask = [.width,.height]; toolbar.addSubview(host)
+        let x = min(screen.frame.width-width-12,max(12,placement.midX-width/2))
+        let below = placement.maxY+12
+        let y = below+104 < screen.frame.height-40 ? below : max(40,placement.minY-116)
+        toolbar.setFrameOrigin(CGPoint(x: x,y: y)); canvas.addSubview(toolbar)
         window.keyHandler = { [weak self] in self?.handle($0) ?? false }
-        toolbar.keyHandler = { [weak self] in self?.handle($0) ?? false }
+        canvas.copyRequested = { [weak self] in self?.onCopy?() }
+        canvas.saveRequested = { [weak self] in self?.onSave?() }
         canvas.action = { [weak self] in self?.handle($0) ?? false }
     }
-    func show() { NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas); toolbar.orderFrontRegardless() }
-    func close() { canvas.finishText(cancel: true); toolbar.close(); window.close() }
+    func show() { NSApp.activate(ignoringOtherApps: true); window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas) }
+    func close() { canvas.finishText(cancel: true); window.close() }
     func selectTool(_ tool: Tool) { canvas.finishText(); model.selectedID = nil; model.tool = tool; model.changed(); window.makeKey(); window.makeFirstResponder(canvas) }
     func rendered() throws -> CGImage { canvas.finishText(); return try ImageRenderer.render(image: model.session.image,state: model.session.state) }
     func handle(_ event: NSEvent) -> Bool {
-        if (window.firstResponder is NSTextView && canvas.textField != nil) || (toolbar.firstResponder is NSTextView) { return false }
+        if (window.firstResponder is NSTextView && canvas.textField != nil) { return false }
         if event.modifierFlags.contains(.command) {
             switch event.charactersIgnoringModifiers?.lowercased() {
             case "c": onCopy?(); return true
@@ -61,7 +60,7 @@ final class EditorController {
 extension CGRect { var center: CGPoint { CGPoint(x: midX,y: midY) } }
 struct EditorToolbar: View {
     @Bindable var model: EditorModel
-    let controller: EditorController
+    unowned let controller: EditorController
     func icon(_ symbol: String, _ label: String, selected: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol).font(.system(size: 14,weight: .medium)).frame(width: 29,height: 29)

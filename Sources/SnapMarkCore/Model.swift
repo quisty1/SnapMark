@@ -34,8 +34,18 @@ public struct Annotation: Identifiable, Equatable, Sendable {
     @MainActor public mutating func resize(to rect: CGRect) {
         let old = bounds
         let sx = rect.width / max(1, old.width), sy = rect.height / max(1, old.height)
-        points = points.map { CGPoint(x: rect.minX + ($0.x - old.minX) * sx, y: rect.minY + ($0.y - old.minY) * sy) }
-        if tool == .text || tool == .step { fontSize = max(8, fontSize * sy) }
+        if tool == .text || tool == .step {
+            let factor = abs(sx-1) >= abs(sy-1) ? sx : sy
+            fontSize = max(8,fontSize*factor)
+            points = [tool == .step ? CGPoint(x: rect.minX+fontSize*0.65,y: rect.minY+fontSize*0.65) : rect.origin]
+        } else {
+            let count = points.count
+            points = points.enumerated().map { index, point in
+                let fraction = CGFloat(index)/CGFloat(max(1,count-1))
+                return CGPoint(x: rect.minX+(old.width < 0.01 ? fraction*rect.width : (point.x-old.minX)*sx),
+                               y: rect.minY+(old.height < 0.01 ? fraction*rect.height : (point.y-old.minY)*sy))
+            }
+        }
     }
 }
 public struct DocumentState: Equatable, Sendable {

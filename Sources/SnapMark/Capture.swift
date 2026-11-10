@@ -7,7 +7,7 @@ struct DisplaySnapshot {
     let screen: NSScreen
     let image: CGImage
 }
-final class KeyPanel: NSPanel {
+class KeyPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
     var keyHandler: ((NSEvent) -> Bool)?
@@ -25,7 +25,17 @@ final class CaptureCoordinator {
     var fullDisplay = false
     var onImage: ((CGImage, CGRect, DisplaySnapshot) -> Void)?
     var onCancel: (() -> Void)?
+    var onError: ((Error) -> Void)?
+    var selectionTask: Task<Void,Never>?
     var capturing = false
+    static func imageConfiguration(pointSize: CGSize,pixelScale: CGFloat) -> SCStreamConfiguration {
+        let config = SCStreamConfiguration()
+        config.width = max(1,Int((pointSize.width*max(1,pixelScale)).rounded()))
+        config.height = max(1,Int((pointSize.height*max(1,pixelScale)).rounded()))
+        config.showsCursor = false; config.captureResolution = .best
+        config.pixelFormat = kCVPixelFormatType_32BGRA; config.colorSpaceName = CGColorSpace.sRGB
+        return config
+    }
     func start(fullDisplay: Bool = false, windowMode: Bool = false) async throws {
         guard !capturing else { return }
         capturing = true
@@ -39,11 +49,7 @@ final class CaptureCoordinator {
             guard let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? UInt32,
                   let display = content.displays.first(where: { $0.displayID == id }) else { continue }
             let filter = SCContentFilter(display: display, excludingApplications: ownApps, exceptingWindows: [])
-            let config = SCStreamConfiguration()
-            config.width = CGDisplayPixelsWide(id); config.height = CGDisplayPixelsHigh(id)
-            config.showsCursor = false; config.captureResolution = .best
-            config.pixelFormat = kCVPixelFormatType_32BGRA
-            config.colorSpaceName = CGColorSpace.sRGB
+            let config = Self.imageConfiguration(pointSize: filter.contentRect.size,pixelScale: CGFloat(filter.pointPixelScale))
             let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
             result.append(DisplaySnapshot(display: display,screen: screen,image: image))
         }
@@ -61,7 +67,7 @@ final class CaptureCoordinator {
             if snapshot.screen.frame.contains(NSEvent.mouseLocation) { panel.makeKeyAndOrderFront(nil); panel.makeFirstResponder(view) }
         }
     }
-    func cancel() { close(); onCancel?() }
+    func cancel() { selectionTask?.cancel(); close(); onCancel?() }
     func close() { panels.forEach { $0.close() }; panels.removeAll(); snapshots.removeAll(); windows.removeAll() }
     func chosen(_ rect: CGRect, snapshot: DisplaySnapshot) {
         let full = CGRect(origin: .zero,size: snapshot.screen.frame.size)
@@ -72,12 +78,37 @@ final class CaptureCoordinator {
         guard let image = snapshot.image.cropping(to: pixels) else { return }
         close(); onImage?(image,local,snapshot)
     }
-    func windowRect(at point: CGPoint, snapshot: DisplaySnapshot) -> CGRect? {
+    func window(at point: CGPoint, snapshot: DisplaySnapshot) -> SCWindow? {
         guard let main = NSScreen.screens.first else { return nil }
         let global = CGPoint(x: snapshot.screen.frame.minX+point.x,y: main.frame.maxY-snapshot.screen.frame.maxY+point.y)
-        guard let w = windows.first(where: { $0.frame.contains(global) }) else { return nil }
+        return windows.first { $0.frame.contains(global) }
+    }
+    func windowRect(at point: CGPoint, snapshot: DisplaySnapshot) -> CGRect? {
+        guard let w = window(at: point,snapshot: snapshot), let main = NSScreen.screens.first else { return nil }
         return CGRect(x: w.frame.minX-snapshot.screen.frame.minX,y: w.frame.minY-(main.frame.maxY-snapshot.screen.frame.maxY),width: w.frame.width,height: w.frame.height)
     }
+    func chooseWindow(at point: CGPoint, snapshot: DisplaySnapshot) {
+        guard !capturing, let selected = window(at: point,snapshot: snapshot) else { return }
+        capturing = true
+        panels.forEach { $0.orderOut(nil) }
+        selectionTask = Task { [weak self] in
+            guard let self else { return }
+            defer { capturing = false; selectionTask = nil }
+            do {
+                let filter = SCContentFilter(desktopIndependentWindow: selected)
+                let config = Self.imageConfiguration(pointSize: filter.contentRect.size,pixelScale: CGFloat(filter.pointPixelScale))
+                config.ignoreShadowsSingleWindow = true
+                let image = try await SCScreenshotManager.captureImage(contentFilter: filter,configuration: config)
+                try Task.checkCancellation()
+                let factor = min(1,min((snapshot.screen.frame.width-80)/selected.frame.width,(snapshot.screen.frame.height-200)/selected.frame.height))
+                let size = CGSize(width: selected.frame.width*factor,height: selected.frame.height*factor)
+                let placement = CGRect(x: (snapshot.screen.frame.width-size.width)/2,y: (snapshot.screen.frame.height-size.height)/2,width: size.width,height: size.height)
+                close(); onImage?(image,placement,snapshot)
+            } catch is CancellationError { close() }
+            catch { close(); onError?(error) }
+        }
+    }
+
 }
 final class CaptureView: NSView {
     let snapshot: DisplaySnapshot
@@ -121,7 +152,7 @@ final class CaptureView: NSView {
         let p = convert(event.locationInWindow,from: nil)
         if coordinator.fullDisplay { coordinator.chosen(bounds,snapshot: snapshot); return }
         if coordinator.windowMode {
-            if let r = coordinator.windowRect(at: p,snapshot: snapshot) { coordinator.chosen(r,snapshot: snapshot) }; return
+            coordinator.chooseWindow(at: p,snapshot: snapshot); return
         }
         start = p; selection = nil
     }

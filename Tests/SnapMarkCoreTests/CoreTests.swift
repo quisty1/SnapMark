@@ -28,7 +28,10 @@ func expectThrows(_ operation: () throws -> Void) throws {
             ("history delete survives reload", t.deleteHistorySurvivesReload),
             ("corrupt history is preserved", t.corruptHistoryIsNotOverwritten),
             ("all drawing tools render", t.drawingToolsLeaveVisiblePixels),
-            ("JPEG flattens transparency on white", t.jpegWhiteBackground)
+            ("JPEG flattens transparency on white", t.jpegWhiteBackground),
+            ("horizontal line resize", t.horizontalLineResize),
+            ("text width resize scales font", t.textWidthResize),
+            ("failed deletion remains retryable", t.failedDeletionRemainsRetryable)
         ]
         var failures = 0
         for (name, test) in tests {
@@ -167,4 +170,34 @@ func expectThrows(_ operation: () throws -> Void) throws {
         let color = rep.colorAt(x: 5,y: 5)!.usingColorSpace(.sRGB)!
         try expect(color.redComponent > 0.98 && color.greenComponent > 0.98 && color.blueComponent > 0.98)
     }
+    func horizontalLineResize() throws {
+        var a = Annotation(tool: .arrow,points: [CGPoint(x: 10,y: 10),CGPoint(x: 50,y: 10)])
+        a.resize(to: CGRect(x: 10,y: 10,width: 80,height: 40))
+        try expect(a.points.last == CGPoint(x: 90,y: 50))
+    }
+    func textWidthResize() throws {
+        var a = Annotation(tool: .text,points: [CGPoint(x: 20,y: 20)],text: "Wide")
+        a.fontSize = 20; let old = a.bounds
+        a.resize(to: CGRect(x: 20,y: 20,width: old.width*2,height: old.height))
+        try expect(a.fontSize == 40)
+    }
+
+    func failedDeletionRemainsRetryable() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = try HistoryStore(directory: dir); try store.add(image: image(),limit: 100)
+        let entry = try require(store.entries.first), url = store.imageURL(entry)
+        defer {
+            try? FileManager.default.setAttributes([.immutable: false],ofItemAtPath: url.path)
+            try? FileManager.default.removeItem(at: dir)
+        }
+        try FileManager.default.setAttributes([.immutable: true],ofItemAtPath: url.path)
+        try expectThrows { try store.delete(entry) }
+        try expect(store.pendingDeletionCount == 1)
+        try FileManager.default.setAttributes([.immutable: false],ofItemAtPath: url.path)
+        try store.retryPendingDeletions()
+        try expect(store.pendingDeletionCount == 0)
+        try expect(!FileManager.default.fileExists(atPath: url.path))
+        try expect(try HistoryStore(directory: dir).pendingDeletionCount == 0)
+    }
+
 }

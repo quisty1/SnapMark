@@ -21,6 +21,8 @@ final class CanvasView: NSView, NSTextFieldDelegate {
     var textField: NSTextField?
     var textAnnotation: Annotation?
     var action: ((NSEvent) -> Bool)?
+    var copyRequested: (() -> Void)?
+    var saveRequested: (() -> Void)?
     var onError: ((Error) -> Void)?
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -89,8 +91,7 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         dragStart = ip
         if model.tool == .select {
             if let id = model.selectedID, let a = model.session.state.annotations.first(where: { $0.id == id }),
-               rectOnView(a.bounds).insetBy(dx: -4,dy: -4).contains(p),
-               abs(p.x-rectOnView(a.bounds).maxX) < 12 && abs(p.y-rectOnView(a.bounds).maxY) < 12 {
+               abs(p.x-(rectOnView(a.bounds).maxX+4)) < 9 && abs(p.y-(rectOnView(a.bounds).maxY+4)) < 9 {
                 editingOriginal = a; draft = a; resize = true; return
             }
             let found = model.session.state.annotations.reversed().first { $0.bounds.insetBy(dx: -8/scale,dy: -8/scale).contains(ip) }
@@ -142,29 +143,35 @@ final class CanvasView: NSView, NSTextFieldDelegate {
         field.isBezeled = true; field.isEditable = true; field.isSelectable = true; field.focusRingType = .exterior
         field.frame = CGRect(x: r.minX,y: r.minY,width: max(180,min(bounds.maxX-r.minX-12,max(300,r.width+40))),height: font.pointSize*1.5+8)
         field.placeholderString = tr("Type text…", "Введите текст…"); field.delegate = self
-        addSubview(field); textField = field; window?.makeFirstResponder(field); field.selectText(nil)
+        addSubview(field); textField = field; window?.makeFirstResponder(field)
+        (field.currentEditor() as? NSTextView)?.setSelectedRange(NSRange(location: 0,length: (a.text as NSString).length))
     }
     func finishText(cancel: Bool = false) {
         guard let field = textField, var a = textAnnotation else { return }
         textField = nil; textAnnotation = nil
-        a.text = field.stringValue
+        a.text = field.currentEditor()?.string ?? field.stringValue
         field.removeFromSuperview()
         if !cancel && !a.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             var state = model.session.state
             if let i = state.annotations.firstIndex(where: { $0.id == a.id }) { state.annotations[i] = a }
             else { state.annotations.append(a) }
             model.session.commit(state)
+        } else if !cancel {
+            var state = model.session.state
+            state.annotations.removeAll { $0.id == a.id }; model.session.commit(state)
         }
         model.changed(); window?.makeFirstResponder(self)
     }
-    func controlTextDidEndEditing(_ obj: Notification) { finishText() }
+    func controlTextDidEndEditing(_ obj: Notification) {
+        guard let field = obj.object as? NSTextField, field === textField else { return }; finishText()
+    }
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         if commandSelector == #selector(NSResponder.cancelOperation(_:)) { finishText(cancel: true); return true }
         if commandSelector == #selector(NSResponder.insertNewline(_:)) { finishText(); return true }
         return false
     }
-    @objc func copy(_ sender: Any?) { if let event = NSApp.currentEvent { _ = action?(event) } }
-    @objc func saveDocument(_ sender: Any?) { if let event = NSApp.currentEvent { _ = action?(event) } }
+    @objc func copy(_ sender: Any?) { copyRequested?() }
+    @objc func saveDocument(_ sender: Any?) { saveRequested?() }
     @objc func undo(_ sender: Any?) { model.undo() }
     @objc func redo(_ sender: Any?) { model.redo() }
     override func keyDown(with event: NSEvent) {

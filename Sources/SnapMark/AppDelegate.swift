@@ -11,7 +11,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var editor: EditorController?
     var captureTask: Task<Void,Never>?
     var ocrTask: Task<Void,Never>?
-    var ocrWindow: NSWindow?
+    var recognizeImage: @Sendable (CGImage) async throws -> OCRResult = { try await OCRService.recognize($0) }
+    var ocrGeneration: UUID?
+    var ocrWindow: OCRPanel?
     var welcomeWindow: NSWindow?
     var settingsWindow: NSWindow?
     var historyWindow: NSWindow?
@@ -32,11 +34,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         hotKey.action = { [weak self] in self?.requestCapture() }
         let result = hotKey.register(code: Settings.shared.keyCode,modifiers: Settings.shared.modifiers)
         if result != noErr { showMessage(tr("Shortcut unavailable", "Сочетание недоступно"),tr("Choose another shortcut in Settings. Capture is still available from the menu bar.", "Выбери другое сочетание в настройках. Захват доступен через строку меню.")) }
+        capture.onError = { [weak self] error in self?.showError(error,title: tr("Could not capture the window", "Не удалось снять окно")) }
         capture.onImage = { [weak self] image, placement, snapshot in self?.openEditor(image: image,placement: placement,screen: snapshot.screen,background: snapshot) }
         if ProcessInfo.processInfo.arguments.contains("--demo") { openDemo() }
         else { showWelcome() }
     }
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showWelcome(); return false }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if let editor { editor.show(); return false }
+        if let panel = capture.panels.first { panel.makeKeyAndOrderFront(nil); return false }
+        if flag { return true }
+        showWelcome(); return false
+    }
     func setupMainMenu() {
         let main = NSMenu()
         let appItem = NSMenuItem(); main.addItem(appItem); let appMenu = NSMenu(); appItem.submenu = appMenu
@@ -60,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         add(tr("Capture display", "Снять экран"),#selector(captureDisplay))
         menu.addItem(.separator())
         add(tr("History…", "История…"),#selector(showHistory))
+        if (history?.pendingDeletionCount ?? 0) > 0 { add(tr("Retry deleting history files", "Повторить удаление файлов истории"),#selector(retryDeletion)) }
         if pendingHistoryImage != nil { add(tr("Retry saving to history", "Повторить запись в историю"),#selector(retryHistory)) }
         add(tr("Settings…", "Настройки…"),#selector(showSettings))
         add(tr("About SnapMark", "О SnapMark"),#selector(showWelcome))
@@ -83,7 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             default: return
             }
         }
-        guard CGPreflightScreenCaptureAccess() else { requestPermission(); return }
+        guard CGPreflightScreenCaptureAccess() else { requestPermission(fullDisplay: fullDisplay,windowMode: windowMode); return }
         previousApp = NSWorkspace.shared.frontmostApplication
         welcomeWindow?.orderOut(nil); historyWindow?.orderOut(nil); settingsWindow?.orderOut(nil)
         captureTask = Task { [weak self] in
@@ -94,13 +103,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         capture.onCancel = { [weak self] in self?.restoreFocus() }
     }
-    func requestPermission() {
+    func requestPermission(fullDisplay: Bool,windowMode: Bool) {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert(); alert.messageText = tr("Allow screen capture", "Разреши захват экрана")
         alert.informativeText = tr("SnapMark needs Screen Recording permission to take screenshots. Images are processed only on this Mac. After enabling permission, return to SnapMark and try again; macOS may ask you to relaunch the app.", "Для скриншотов SnapMark нужен доступ к записи экрана. Изображения обрабатываются только на этом Mac. После выдачи доступа вернись и повтори захват; macOS может попросить перезапустить приложение.")
         alert.addButton(withTitle: tr("Grant access", "Предоставить доступ")); alert.addButton(withTitle: tr("Cancel", "Отмена"))
         if alert.runModal() == .alertFirstButtonReturn {
-            if CGRequestScreenCaptureAccess() { requestCapture() }
+            if CGRequestScreenCaptureAccess() { requestCapture(fullDisplay: fullDisplay,windowMode: windowMode) }
             else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") { NSWorkspace.shared.open(url) }
         }
     }
@@ -115,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         editor = e; e.show()
     }
     func closeEditor() {
-        ocrTask?.cancel(); ocrTask = nil; ocrWindow?.close(); ocrWindow = nil
+        dismissOCR()
         editor?.close(); editor = nil
     }
     func restoreFocus() {
@@ -130,7 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let editor else { return }
         do {
             let image = try editor.rendered()
-            editor.window.orderOut(nil); editor.toolbar.orderOut(nil)
+            editor.window.orderOut(nil)
             if save(image) { closeEditor(); record(image); restoreFocus() }
             else { editor.show() }
         } catch { showError(error) }
@@ -158,6 +167,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         do { try history.add(image: image,limit: Settings.shared.historyLimit); pendingHistoryImage = nil }
         catch { pendingHistoryImage = image; showError(error,title: tr("Image completed, but history was not saved. Retry from the menu bar.", "Снимок готов, но история не записана. Повтори запись через строку меню.")) }
     }
+    @objc func retryDeletion() { do { try history?.retryPendingDeletions() } catch { showError(error) } }
     @objc func retryHistory() {
         guard let image = pendingHistoryImage else { return }
         if history == nil {
@@ -172,7 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let screen = NSScreen.main ?? NSScreen.screens[0]
         let factor = min(1,min(560/CGFloat(image.width),420/CGFloat(image.height)))
         let size = CGSize(width: max(160,CGFloat(image.width)*factor),height: max(100,CGFloat(image.height)*factor))
-        let window = NSWindow(contentRect: CGRect(origin: screen.visibleFrame.center,size: size),styleMask: [.titled,.closable,.resizable,.fullSizeContentView],backing: .buffered,defer: false)
+        let window = PinnedWindow(contentRect: CGRect(origin: screen.visibleFrame.center,size: size),styleMask: [.titled,.closable,.resizable,.fullSizeContentView],backing: .buffered,defer: false)
         window.title = "SnapMark"; window.titleVisibility = .hidden; window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false; window.level = .floating; window.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary]
         window.isMovableByWindowBackground = true; window.minSize = CGSize(width: 120,height: 90)
@@ -182,38 +192,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             window?.close(); self?.pinned.removeAll { $0 === window }
         }))
         pinned.append(window); window.center(); window.orderFrontRegardless()
-        // NSWindow's native close button releases our retained pin as well.
-        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification,object: window,queue: .main) { [weak self, weak window] _ in
-            MainActor.assumeIsolated { self?.pinned.removeAll { $0 === window } }
-        }
+        window.didClose = { [weak self, weak window] in self?.pinned.removeAll { $0 === window } }
     }
     func recognizeText() {
         guard let e = editor, !e.model.ocrBusy else { return }
         do {
-            let image = try e.rendered(); e.model.ocrBusy = true
+            let image = try e.rendered(); let generation = UUID(); ocrGeneration = generation; e.model.ocrBusy = true
             showOCR(text: tr("Recognizing text…", "Распознавание текста…"),busy: true)
             ocrTask = Task { [weak self, weak e] in
                 guard let self, let e else { return }
-                defer { e.model.ocrBusy = false; ocrTask = nil }
+                defer { if ocrGeneration == generation { e.model.ocrBusy = false; ocrTask = nil } }
                 do {
-                    let result = try await OCRService.recognize(image)
-                    guard !Task.isCancelled, editor === e else { return }
+                    let result = try await recognizeImage(image)
+                    guard !Task.isCancelled, editor === e, ocrGeneration == generation else { return }
                     var text = result.text.isEmpty ? tr("No text found.", "Текст не найден.") : result.text
                     if !result.russianAvailable { text += "\n\n" + tr("Russian recognition is unavailable in this system version.", "Распознавание русского недоступно в этой версии системы.") }
                     showOCR(text: text,busy: false,copyText: result.text)
-                } catch is CancellationError {} catch { if !Task.isCancelled { showOCR(text: tr("Recognition failed: ", "Не удалось распознать текст: ")+error.localizedDescription,busy: false) } }
+                } catch is CancellationError {} catch { if !Task.isCancelled && ocrGeneration == generation { showOCR(text: tr("Recognition failed: ", "Не удалось распознать текст: ")+error.localizedDescription,busy: false) } }
             }
         } catch { showError(error) }
     }
     func showOCR(text: String,busy: Bool,copyText: String = "") {
-        ocrWindow?.close()
-        let window = KeyPanel(contentRect: CGRect(x: 0,y: 0,width: 460,height: 300),styleMask: [.titled,.closable,.resizable],backing: .buffered,defer: false)
+        let creating = ocrWindow == nil
+        let window = ocrWindow ?? OCRPanel(contentRect: CGRect(x: 0,y: 0,width: 460,height: 300),styleMask: [.titled,.closable,.resizable],backing: .buffered,defer: false)
         window.isReleasedWhenClosed = false; window.level = .screenSaver; window.title = tr("Recognized text", "Распознанный текст")
         window.collectionBehavior = [.canJoinAllSpaces,.fullScreenAuxiliary]
         window.contentView = NSHostingView(rootView: OCRView(text: text,busy: busy,copyText: copyText,close: { [weak self] in
-            self?.ocrTask?.cancel(); self?.editor?.model.ocrBusy = false; self?.ocrWindow?.close(); self?.ocrWindow = nil
+            self?.dismissOCR()
         }))
-        ocrWindow = window; window.center(); window.makeKeyAndOrderFront(nil)
+        window.didClose = { [weak self] in self?.dismissOCR() }
+        ocrWindow = window; if creating { window.center() }; window.makeKeyAndOrderFront(nil)
+    }
+    func dismissOCR() {
+        ocrGeneration = nil; ocrTask?.cancel(); ocrTask = nil; editor?.model.ocrBusy = false
+        let old = ocrWindow; ocrWindow = nil; old?.didClose = nil; old?.close()
     }
     @objc func showWelcome() {
         if welcomeWindow == nil {
@@ -304,6 +316,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let image = DemoImage.make()
         openEditor(image: image,placement: CGRect(x: 160,y: 170,width: 800,height: 500),screen: screen,background: nil)
     }
+}
+final class PinnedWindow: NSWindow {
+    var didClose: (() -> Void)?
+    override func close() { super.close(); didClose?() }
+}
+final class OCRPanel: KeyPanel {
+    var didClose: (() -> Void)?
+    override func close() { super.close(); didClose?() }
 }
 struct OCRView: View {
     let text: String
