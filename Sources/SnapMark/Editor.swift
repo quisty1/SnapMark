@@ -61,17 +61,17 @@ extension CGRect { var center: CGPoint { CGPoint(x: midX,y: midY) } }
 struct EditorToolbar: View {
     @Bindable var model: EditorModel
     unowned let controller: EditorController
-    func icon(_ symbol: String, _ label: String, selected: Bool = false, action: @escaping () -> Void) -> some View {
+    func icon(_ symbol: String, _ label: String, selected: Bool = false, tooltip: String? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol).font(.system(size: 14,weight: .medium)).frame(width: 29,height: 29)
                 .foregroundStyle(selected ? Color.white : Color.primary)
                 .background(selected ? Color.accentColor : Color.clear,in: RoundedRectangle(cornerRadius: 7))
-        }.buttonStyle(.plain).help(label).accessibilityLabel(label)
+        }.buttonStyle(.plain).help(tooltip ?? label).accessibilityLabel(label)
     }
     var body: some View {
         VStack(spacing: 7) {
             HStack(spacing: 3) {
-                ForEach(Tool.allCases,id: \.self) { tool in icon(tool.symbol,tool.title,selected: model.tool == tool) { controller.selectTool(tool) } }
+                ForEach(Tool.allCases,id: \.self) { tool in icon(tool.symbol,tool.title,selected: model.tool == tool,tooltip: tool.helpText) { controller.selectTool(tool) } }
                 Spacer(minLength: 4)
                 icon("arrow.uturn.backward",tr("Undo", "Отменить")) { model.undo() }.disabled(!model.session.canUndo)
                 icon("arrow.uturn.forward",tr("Redo", "Повторить")) { model.redo() }.disabled(!model.session.canRedo)
@@ -82,14 +82,14 @@ struct EditorToolbar: View {
             HStack(spacing: 10) {
                 ColorPicker(tr("Color", "Цвет"),selection: $model.color,supportsOpacity: false).labelsHidden().frame(width: 30).help(tr("Color", "Цвет"))
                 if [.text,.step].contains(model.tool) || selectedTool == .text || selectedTool == .step {
-                    Text("Aa").font(.system(size: 12)); Slider(value: $model.fontSize,in: 10...100).frame(width: 72)
+                    Text("Aa").font(.system(size: 12)); Slider(value: $model.fontSize,in: 10...100).frame(width: 72).help(tr("Text size: \(Int(model.fontSize)) px", "Размер текста: \(Int(model.fontSize)) пикс." )).accessibilityLabel(tr("Text size", "Размер текста"))
                     Toggle("B",isOn: $model.bold).toggleStyle(.button).fontWeight(.bold).help(tr("Bold", "Полужирный"))
                 } else if [.blur,.pixelate].contains(model.tool) || selectedTool == .blur || selectedTool == .pixelate {
-                    Image(systemName: "slider.horizontal.3"); Slider(value: $model.strength,in: 4...60).frame(width: 92)
+                    Image(systemName: "slider.horizontal.3"); Slider(value: $model.strength,in: 4...60).frame(width: 92).help(tr("Blur or pixelation intensity", "Интенсивность размытия или пикселизации")).accessibilityLabel(tr("Effect intensity", "Интенсивность эффекта"))
                 } else {
-                    Image(systemName: "lineweight").font(.system(size: 12)); Slider(value: $model.width,in: 1...24).frame(width: 72)
+                    Image(systemName: "lineweight").font(.system(size: 12)); Slider(value: $model.width,in: 1...24).frame(width: 72).help(tr("Stroke width: \(Int(model.width)) px", "Толщина линии: \(Int(model.width)) пикс.")).accessibilityLabel(tr("Stroke width", "Толщина линии"))
                     if [.rectangle,.ellipse].contains(model.tool) || selectedTool == .rectangle || selectedTool == .ellipse {
-                        Toggle(tr("Fill", "Заливка"),isOn: $model.filled).toggleStyle(.button).font(.system(size: 11))
+                        Toggle(tr("Fill", "Заливка"),isOn: $model.filled).toggleStyle(.button).font(.system(size: 11)).help(tr("Fill the shape with the selected color", "Залить фигуру выбранным цветом"))
                     }
                 }
                 Spacer(minLength: 2)
@@ -99,7 +99,7 @@ struct EditorToolbar: View {
                 icon("square.and.arrow.down",tr("Save…", "Сохранить…")) { controller.onSave?() }
                 Button { controller.onCopy?() } label: {
                     Label(tr("Copy", "Копировать"),systemImage: "doc.on.doc").font(.system(size: 12,weight: .semibold)).padding(.horizontal,6).padding(.vertical,4)
-                }.buttonStyle(.borderedProminent).controlSize(.small)
+                }.buttonStyle(.borderedProminent).controlSize(.small).help(tr("Copy the finished image and close the editor (⌘C)", "Скопировать готовый снимок и закрыть редактор (⌘C)"))
             }
         }.padding(12).frame(maxWidth: .infinity).tint(.blue)
             .onChange(of: model.color) { model.applyStyle() }

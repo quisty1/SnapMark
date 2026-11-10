@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             history = try HistoryStore(directory: directory)
         } catch { showError(error,title: tr("History could not be opened. Existing files were preserved.", "Не удалось открыть историю. Существующие файлы сохранены.")) }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem.button?.toolTip = tr("SnapMark — capture and annotate screenshots", "SnapMark — захват экрана и пометки")
         statusItem.button?.image = NSImage(systemSymbolName: "viewfinder",accessibilityDescription: "SnapMark")
         let menu = NSMenu(); menu.delegate = self; statusItem.menu = menu
         hotKey.action = { [weak self] in self?.requestCapture() }
@@ -62,7 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
-        func add(_ title: String, _ selector: Selector) { let i = NSMenuItem(title: title,action: selector,keyEquivalent: ""); i.target = self; menu.addItem(i) }
+        func add(_ title: String, _ selector: Selector) { let i = NSMenuItem(title: title,action: selector,keyEquivalent: ""); i.target = self; i.toolTip = title; menu.addItem(i) }
         add(tr("Capture area", "Снять область") + "   " + shortcutLabel(),#selector(captureArea))
         add(tr("Capture window", "Снять окно"),#selector(captureWindow))
         add(tr("Capture display", "Снять экран"),#selector(captureDisplay))
@@ -85,6 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let alert = NSAlert(); alert.messageText = tr("A screenshot is being edited", "Снимок уже открыт")
             alert.informativeText = tr("Finish this screenshot or discard it before taking another.", "Заверши текущий снимок или отмени его перед новым захватом.")
             alert.addButton(withTitle: tr("Continue editing", "Продолжить правки")); alert.addButton(withTitle: tr("Discard and capture", "Отменить и снять новый")); alert.addButton(withTitle: tr("Copy and capture", "Скопировать и снять новый"))
+            for button in alert.buttons { button.toolTip = button.title }
             alert.window.level = .screenSaver
             switch alert.runModal() {
             case .alertSecondButtonReturn: closeEditor()
@@ -108,6 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let alert = NSAlert(); alert.messageText = tr("Allow screen capture", "Разреши захват экрана")
         alert.informativeText = tr("SnapMark needs Screen Recording permission to take screenshots. Images are processed only on this Mac. After enabling permission, return to SnapMark and try again; macOS may ask you to relaunch the app.", "Для скриншотов SnapMark нужен доступ к записи экрана. Изображения обрабатываются только на этом Mac. После выдачи доступа вернись и повтори захват; macOS может попросить перезапустить приложение.")
         alert.addButton(withTitle: tr("Grant access", "Предоставить доступ")); alert.addButton(withTitle: tr("Cancel", "Отмена"))
+        for button in alert.buttons { button.toolTip = button.title }
         if alert.runModal() == .alertFirstButtonReturn {
             if CGRequestScreenCaptureAccess() { requestCapture(fullDisplay: fullDisplay,windowMode: windowMode) }
             else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") { NSWorkspace.shared.open(url) }
@@ -275,6 +278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 do { try history.delete(e) } catch { self?.showError(error) }
             },clear: { [weak self] in
                 let a = NSAlert(); a.messageText = tr("Delete all history?", "Удалить всю историю?"); a.informativeText = tr("Saved screenshots in SnapMark history will be permanently deleted. Exported files are kept.", "Снимки в истории SnapMark будут удалены безвозвратно. Экспортированные файлы сохранятся."); a.addButton(withTitle: tr("Cancel", "Отмена")); a.addButton(withTitle: tr("Delete", "Удалить"))
+                for button in a.buttons { button.toolTip = button.title }
                 if a.runModal() == .alertSecondButtonReturn { do { try history.clear() } catch { self?.showError(error) } }
             })
             historyWindow = hostedWindow(title: tr("History", "История"),size: CGSize(width: 900,height: 620),view: root,resizable: true)
@@ -307,7 +311,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func showError(_ error: Error,title: String? = nil) { showMessage(title ?? tr("Something went wrong", "Не удалось выполнить действие"),error.localizedDescription) }
     func showMessage(_ title: String,_ detail: String) {
         let alert = NSAlert(); alert.messageText = title; alert.informativeText = detail
-        alert.addButton(withTitle: tr("OK", "Понятно")); alert.window.level = .screenSaver
+        alert.addButton(withTitle: tr("OK", "Понятно")); alert.buttons.first?.toolTip = tr("Dismiss this message", "Закрыть сообщение"); alert.window.level = .screenSaver
         NSApp.activate(ignoringOtherApps: true); alert.runModal()
     }
     func openDemo() {
@@ -336,12 +340,12 @@ struct OCRView: View {
             if busy { ProgressView().controlSize(.small) }
             ScrollView { Text(text).font(.system(size: 14)).textSelection(.enabled).frame(maxWidth: .infinity,alignment: .leading).padding(4) }.frame(maxWidth: .infinity,maxHeight: .infinity)
             HStack {
-                Button(tr(busy ? "Cancel" : "Close",busy ? "Отмена" : "Закрыть"),action: close)
+                Button(tr(busy ? "Cancel" : "Close",busy ? "Отмена" : "Закрыть"),action: close).help(tr(busy ? "Cancel text recognition and return to the editor" : "Close recognized text and return to the editor",busy ? "Отменить распознавание и вернуться к редактору" : "Закрыть распознанный текст и вернуться к редактору"))
                 Spacer()
                 if !copyText.isEmpty {
                     Button(tr(copied ? "Copied" : "Copy text",copied ? "Скопировано" : "Скопировать текст")) {
                         NSPasteboard.general.clearContents(); copied = NSPasteboard.general.setString(copyText,forType: .string)
-                    }.buttonStyle(.borderedProminent)
+                    }.buttonStyle(.borderedProminent).help(tr("Copy recognized text without closing the editor", "Скопировать распознанный текст, оставив редактор открытым"))
                 }
             }
         }.padding(20).frame(minWidth: 350,minHeight: 220).tint(.blue)

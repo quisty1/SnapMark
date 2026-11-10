@@ -68,3 +68,13 @@ The final `.app` is signed and its screen-capture permission is enabled at its c
 - Autonomous CLT-compatible test executables instead of adding a network dependency for a test framework.
 - History deletion tombstones retain only metadata for failed removals and retry on relaunch or explicit menu action. Source pixels and editable document objects are never persisted.
 - No unresolved Important/Critical findings from the independent source review remain. Its editor ownership, OCR lifecycle, window-source filtering, menu commands and deletion issues were addressed; regression checks cover the affected behavior where it can be tested without an external display.
+
+
+## 1.0.1 update — 2026-11-11
+
+- Source repository moved to `PROGRAMMING/MY/SnapMark`; its Git history was retained locally.
+- Default stroke width is now 12 px (approximately the middle of the 1–24 range) in both the editor defaults and annotation model.
+- Added localized hover help to remaining buttons, shape fill, sliders, preferences, OCR actions, confirmation buttons and export format selection. Drawing tools now explain their interactions.
+- Re-ran `./scripts/test.sh` after the move and code changes: exit 0, all 25 checks passed.
+- Public source repository: https://github.com/quisty1/SnapMark . Application Support history and screenshots are excluded from publication.
+- A rebuilt ad-hoc app can require a refreshed Screen Recording permission; the previous 1.0 real capture checks remain documented above.

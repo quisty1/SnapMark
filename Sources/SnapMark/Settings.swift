@@ -43,6 +43,23 @@ extension Tool {
         case .crop: tr("Crop", "Обрезка")
         }
     }
+    var helpText: String {
+        switch self {
+        case .select: tr("Select an annotation, drag to move it, or drag its corner to resize. Delete removes it.", "Выбери объект: перетащи его для перемещения или потяни за угол для изменения размера. Delete удаляет объект.")
+        case .pen: tr("Drag to draw a freehand line.", "Рисуй произвольную линию перетаскиванием.")
+        case .highlighter: tr("Drag to highlight with a translucent broad stroke.", "Выделяй фрагменты широким полупрозрачным маркером.")
+        case .line: tr("Drag from the start to the end of a straight line.", "Протяни от начала до конца прямой линии.")
+        case .arrow: tr("Drag toward the point you want the arrow to indicate.", "Протяни стрелку к месту, на которое хочешь указать.")
+        case .rectangle: tr("Drag to draw a rectangle. Enable Fill for a solid shape.", "Протяни прямоугольник. Включи «Заливка» для сплошной фигуры.")
+        case .ellipse: tr("Drag to draw an ellipse. Enable Fill for a solid shape.", "Протяни эллипс. Включи «Заливка» для сплошной фигуры.")
+        case .text: tr("Click to type text. Enter finishes; double-click existing text to edit it.", "Щёлкни для ввода текста. Enter завершает ввод; двойной щелчок изменяет готовую надпись.")
+        case .step: tr("Click to place the next numbered step.", "Щёлкни, чтобы поставить следующий номер шага.")
+        case .blur: tr("Drag over an area to blur it. Adjust the effect with the intensity slider.", "Выдели область для размытия. Силу эффекта меняет ползунок интенсивности.")
+        case .pixelate: tr("Drag over an area to pixelate it.", "Выдели область, которую нужно закрыть пикселями.")
+        case .conceal: tr("Drag to cover an area with an opaque color.", "Выдели область, которую нужно закрыть непрозрачной заливкой.")
+        case .crop: tr("Drag to keep only the selected area. Undo restores the previous crop.", "Выдели область, которую нужно оставить. Отмена возвращает прежнюю обрезку.")
+        }
+    }
     var symbol: String {
         switch self {
         case .select: "cursorarrow"; case .pen: "pencil.tip"; case .highlighter: "highlighter"
@@ -57,7 +74,7 @@ extension Tool {
     let session: EditSession
     var tool: Tool = .arrow
     var color: Color = .blue
-    var width: Double = 4
+    var width: Double = 12
     var fontSize: Double = 28
     var strength: Double = 16
     var filled = false

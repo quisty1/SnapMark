@@ -13,7 +13,7 @@ public struct RGBA: Equatable, Codable, Sendable {
 public struct Annotation: Identifiable, Equatable, Sendable {
     public let id: UUID
     public var tool: Tool; public var points: [CGPoint]; public var text: String
-    public var color = RGBA(); public var width: CGFloat = 4; public var fontSize: CGFloat = 28
+    public var color = RGBA(); public var width: CGFloat = 12; public var fontSize: CGFloat = 28
     public var bold = false; public var filled = false; public var strength: CGFloat = 16; public var number = 1
     public init(id: UUID = UUID(), tool: Tool, points: [CGPoint], text: String = "") {
         self.id = id; self.tool = tool; self.points = points; self.text = text

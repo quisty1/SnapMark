@@ -51,6 +51,7 @@ final class ExportFormat: NSObject {
     let popup = NSPopUpButton(frame: CGRect(x: 80,y: 0,width: 130,height: 26))
     init(panel: NSSavePanel) {
         self.panel = panel; super.init()
+        popup.toolTip = tr("Choose the exported image format", "Выбрать формат сохраняемого изображения")
         popup.addItems(withTitles: ["PNG", "JPEG"]); popup.target = self; popup.action = #selector(change)
         let view = NSView(frame: CGRect(x: 0,y: 0,width: 240,height: 30))
         let label = NSTextField(labelWithString: tr("Format:", "Формат:")); label.frame = CGRect(x: 0,y: 4,width: 76,height: 20)

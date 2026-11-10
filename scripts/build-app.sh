@@ -18,8 +18,8 @@ with open(sys.argv[1], 'wb') as f:
     plistlib.dump({
         'CFBundleName':'SnapMark','CFBundleDisplayName':'SnapMark',
         'CFBundleIdentifier':'local.snapmark.app','CFBundleExecutable':'SnapMark',
-        'CFBundlePackageType':'APPL','CFBundleShortVersionString':'1.0.0',
-        'CFBundleVersion':'1','LSMinimumSystemVersion':'14.0',
+        'CFBundlePackageType':'APPL','CFBundleShortVersionString':'1.0.1',
+        'CFBundleVersion':'2','LSMinimumSystemVersion':'14.0',
         'LSUIElement':True,'NSHighResolutionCapable':True,
         'CFBundleIconFile':'SnapMark','CFBundleDevelopmentRegion':'en',
         'CFBundleLocalizations':['en','ru'],

@@ -17,8 +17,8 @@ struct WelcomeView: View {
             }
             Text(tr("Capture an area, annotate it and copy the result.\nYour screenshots and recognized text stay on this Mac.", "Выдели область, добавь пометки и скопируй результат.\nСкриншоты и распознанный текст остаются на этом Mac."))
                 .font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center).lineSpacing(4).fixedSize(horizontal: false,vertical: true)
-            Button(action: capture) { Label(tr("Take a screenshot", "Сделать скриншот"),systemImage: "plus").padding(.horizontal,14).padding(.vertical,5) }.buttonStyle(.borderedProminent).controlSize(.large)
-            HStack(spacing: 24) { Button(tr("Try the editor", "Попробовать редактор"),action: sample); Button(tr("History", "История"),action: history); Button(tr("Settings", "Настройки"),action: settings) }.buttonStyle(.link).font(.system(size: 12))
+            Button(action: capture) { Label(tr("Take a screenshot", "Сделать скриншот"),systemImage: "plus").padding(.horizontal,14).padding(.vertical,5) }.buttonStyle(.borderedProminent).controlSize(.large).help(tr("Capture an area, window or display", "Снять область, окно или экран"))
+            HStack(spacing: 24) { Button(tr("Try the editor", "Попробовать редактор"),action: sample).help(tr("Open a sample image to try the drawing tools", "Открыть учебное изображение и попробовать инструменты")); Button(tr("History", "История"),action: history).help(tr("Browse completed screenshots saved on this Mac", "Посмотреть готовые снимки, сохранённые на этом Mac")); Button(tr("Settings", "Настройки"),action: settings).help(tr("Change language, appearance, shortcut and history limit", "Настроить язык, тему, сочетание клавиш и лимит истории")) }.buttonStyle(.link).font(.system(size: 12))
             Text(tr("Available in the menu bar · Esc cancels capture", "Всегда в строке меню · Esc отменяет захват")).font(.system(size: 11)).foregroundStyle(.tertiary)
         }.padding(30).frame(width: 520,height: 410).tint(.blue)
     }
@@ -35,23 +35,23 @@ struct SettingsView: View {
             Section(tr("Appearance", "Внешний вид")) {
                 Picker(tr("Language", "Язык"),selection: $settings.language) {
                     Text(tr("System", "Системный")).tag("system"); Text("Русский").tag("ru"); Text("English").tag("en")
-                }
+                }.help(tr("Choose the interface language", "Выбрать язык интерфейса"))
                 Picker(tr("Theme", "Тема"),selection: $settings.theme) {
                     Text(tr("System", "Системная")).tag("system"); Text(tr("Light", "Светлая")).tag("light"); Text(tr("Dark", "Тёмная")).tag("dark")
-                }
+                }.help(tr("Choose light, dark or system appearance", "Выбрать светлую, тёмную или системную тему"))
             }
             Section(tr("Capture", "Захват")) {
                 HStack {
                     Text(tr("Global shortcut", "Горячая клавиша")); Spacer()
-                    Button(shortcutLabel(),action: recordShortcut).font(.system(.body,design: .monospaced))
-                    Button(tr("Reset", "Сбросить"),action: resetShortcut)
+                    Button(shortcutLabel(),action: recordShortcut).font(.system(.body,design: .monospaced)).help(tr("Record a new global capture shortcut", "Задать новое глобальное сочетание для захвата"))
+                    Button(tr("Reset", "Сбросить"),action: resetShortcut).help(tr("Restore the default shortcut: ⌃⇧2", "Вернуть сочетание по умолчанию: ⌃⇧2"))
                 }
                 Text(tr("Click the shortcut and press a new combination with Control, Option or Command.", "Нажми на сочетание и введи новое с Control, Option или Command.")).font(.caption).foregroundStyle(.secondary)
             }
             Section(tr("Local history", "Локальная история")) {
                 Stepper(value: $settings.historyLimit,in: 1...1000,step: 10) {
                     Text(tr("Keep up to \(settings.historyLimit) screenshots", "Хранить до \(settings.historyLimit) снимков"))
-                }.onChange(of: settings.historyLimit) { trim() }
+                }.help(tr("Maximum completed screenshots to keep; older images are removed", "Максимум готовых снимков в истории; более старые удаляются")).onChange(of: settings.historyLimit) { trim() }
                 Text(tr("Only finished images are saved. Original pixels and editable annotations are not retained. Older images are removed when the limit is reached.", "Сохраняются только готовые картинки. Исходники и редактируемые объекты не хранятся. При достижении лимита старые снимки удаляются.")).font(.caption).foregroundStyle(.secondary)
             }
         }.formStyle(.grouped).padding(8).frame(width: 530,height: 410).onChange(of: settings.language) { languageChanged() }
@@ -82,7 +82,7 @@ struct HistoryView: View {
             HStack {
                 Text(tr("History", "История")).font(.title2.weight(.semibold))
                 Text("\(store.entries.count)").font(.caption).foregroundStyle(.secondary)
-                Spacer(); Button(tr("Clear history…", "Очистить историю…"),action: clear).disabled(store.entries.isEmpty)
+                Spacer(); Button(tr("Clear history…", "Очистить историю…"),action: clear).help(tr("Delete every image from SnapMark history; exported files are kept", "Удалить все снимки из истории SnapMark; экспортированные файлы сохранятся")).disabled(store.entries.isEmpty)
             }.padding(18)
             Divider()
             if store.entries.isEmpty {
@@ -109,12 +109,12 @@ struct HistoryView: View {
                                 Image(nsImage: image).resizable().scaledToFit().frame(maxWidth: .infinity,maxHeight: .infinity).padding(18)
                             }
                             HStack {
-                                Button { edit(e) } label: { Label(tr("Annotate", "Пометки"),systemImage: "pencil") }
+                                Button { edit(e) } label: { Label(tr("Annotate", "Пометки"),systemImage: "pencil") }.help(tr("Add new annotations to this finished image", "Добавить новые пометки поверх готового снимка"))
                                 Button { pin(e) } label: { Image(systemName: "pin") }.help(tr("Pin", "Закрепить"))
                                 Button { save(e) } label: { Image(systemName: "square.and.arrow.down") }.help(tr("Save", "Сохранить"))
                                 Button(role: .destructive) { delete(e) } label: { Image(systemName: "trash") }.help(tr("Delete", "Удалить"))
                                 Spacer()
-                                Button { copy(e) } label: { Label(tr("Copy", "Копировать"),systemImage: "doc.on.doc") }.buttonStyle(.borderedProminent)
+                                Button { copy(e) } label: { Label(tr("Copy", "Копировать"),systemImage: "doc.on.doc") }.buttonStyle(.borderedProminent).help(tr("Copy this finished image to the clipboard", "Скопировать готовый снимок в буфер обмена"))
                             }.controlSize(.small).padding([.horizontal,.bottom],18)
                         }.frame(minWidth: 420,maxWidth: .infinity,maxHeight: .infinity)
                     }
