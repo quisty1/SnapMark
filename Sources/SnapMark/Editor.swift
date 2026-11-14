@@ -7,6 +7,7 @@ final class EditorController {
     let window: KeyPanel
     let toolbar: NSVisualEffectView
     let canvas: CanvasView
+    let tips: ToolbarTips
     var onCopy: (() -> Void)?
     var onSave: (() -> Void)?
     var onPin: (() -> Void)?
@@ -25,6 +26,7 @@ final class EditorController {
         toolbar.material = .popover; toolbar.blendingMode = .withinWindow; toolbar.state = .active
         toolbar.wantsLayer = true; toolbar.layer?.cornerRadius = 14; toolbar.layer?.masksToBounds = true
         toolbar.layer?.borderWidth = 0.5; toolbar.layer?.borderColor = NSColor.separatorColor.cgColor
+        tips = ToolbarTips(toolbar: toolbar, window: window)
         let host = NSHostingView(rootView: EditorToolbar(model: model,controller: self))
         host.frame = toolbar.bounds; host.autoresizingMask = [.width,.height]; toolbar.addSubview(host)
         let x = min(screen.frame.width-width-12,max(12,placement.midX-width/2))
@@ -66,40 +68,47 @@ struct EditorToolbar: View {
             Image(systemName: symbol).font(.system(size: 14,weight: .medium)).frame(width: 29,height: 29)
                 .foregroundStyle(selected ? Color.white : Color.primary)
                 .background(selected ? Color.accentColor : Color.clear,in: RoundedRectangle(cornerRadius: 7))
-        }.buttonStyle(.plain).help(tooltip ?? label).accessibilityLabel(label)
+        }.buttonStyle(.plain).accessibilityLabel(label).toolbarTip(controller.tips, label, detail: tooltip)
     }
     var body: some View {
         VStack(spacing: 7) {
             HStack(spacing: 3) {
                 ForEach(Tool.allCases,id: \.self) { tool in icon(tool.symbol,tool.title,selected: model.tool == tool,tooltip: tool.helpText) { controller.selectTool(tool) } }
                 Spacer(minLength: 4)
-                icon("arrow.uturn.backward",tr("Undo", "Отменить")) { model.undo() }.disabled(!model.session.canUndo)
-                icon("arrow.uturn.forward",tr("Redo", "Повторить")) { model.redo() }.disabled(!model.session.canRedo)
+                icon("arrow.uturn.backward",tr("Undo", "Отменить"),tooltip: tr("Undo the last change (⌘Z)", "Отменить последнее изменение (⌘Z)")) { model.undo() }.disabled(!model.session.canUndo)
+                icon("arrow.uturn.forward",tr("Redo", "Повторить"),tooltip: tr("Redo the last undone change (⇧⌘Z)", "Вернуть последнее отменённое изменение (⇧⌘Z)")) { model.redo() }.disabled(!model.session.canRedo)
                 Divider().frame(height: 20)
-                icon("xmark",tr("Cancel", "Отмена")) { controller.onCancel?() }
+                icon("xmark",tr("Cancel", "Отмена"),tooltip: tr("Close the editor without keeping the screenshot (Esc)", "Закрыть редактор без сохранения снимка (Esc)")) { controller.onCancel?() }
             }
             Divider().opacity(0.5)
             HStack(spacing: 10) {
-                ColorPicker(tr("Color", "Цвет"),selection: $model.color,supportsOpacity: false).labelsHidden().frame(width: 30).help(tr("Color", "Цвет"))
+                ColorPicker(tr("Color", "Цвет"),selection: $model.color,supportsOpacity: false).labelsHidden().frame(width: 30)
+                    .toolbarTip(controller.tips, tr("Color", "Цвет"),detail: tr("Choose the color for annotations", "Выбрать цвет пометок"))
                 if [.text,.step].contains(model.tool) || selectedTool == .text || selectedTool == .step {
-                    Text("Aa").font(.system(size: 12)); Slider(value: $model.fontSize,in: 10...100).frame(width: 72).help(tr("Text size: \(Int(model.fontSize)) px", "Размер текста: \(Int(model.fontSize)) пикс." )).accessibilityLabel(tr("Text size", "Размер текста"))
-                    Toggle("B",isOn: $model.bold).toggleStyle(.button).fontWeight(.bold).help(tr("Bold", "Полужирный"))
+                    Text("Aa").font(.system(size: 12)); Slider(value: $model.fontSize,in: 10...100).frame(width: 72).accessibilityLabel(tr("Text size", "Размер текста"))
+                        .toolbarTip(controller.tips, tr("Text size", "Размер текста"))
+                    Toggle("B",isOn: $model.bold).toggleStyle(.button).fontWeight(.bold).accessibilityLabel(tr("Bold", "Полужирный"))
+                        .toolbarTip(controller.tips, tr("Bold", "Полужирный"),detail: tr("Use bold text", "Сделать текст полужирным"))
                 } else if [.blur,.pixelate].contains(model.tool) || selectedTool == .blur || selectedTool == .pixelate {
-                    Image(systemName: "slider.horizontal.3"); Slider(value: $model.strength,in: 4...60).frame(width: 92).help(tr("Blur or pixelation intensity", "Интенсивность размытия или пикселизации")).accessibilityLabel(tr("Effect intensity", "Интенсивность эффекта"))
+                    Image(systemName: "slider.horizontal.3"); Slider(value: $model.strength,in: 4...60).frame(width: 92).accessibilityLabel(tr("Effect intensity", "Интенсивность эффекта"))
+                        .toolbarTip(controller.tips, tr("Blur or pixelation intensity", "Интенсивность размытия или пикселизации"))
                 } else {
-                    Image(systemName: "lineweight").font(.system(size: 12)); Slider(value: $model.width,in: 1...24).frame(width: 72).help(tr("Stroke width: \(Int(model.width)) px", "Толщина линии: \(Int(model.width)) пикс.")).accessibilityLabel(tr("Stroke width", "Толщина линии"))
+                    Image(systemName: "lineweight").font(.system(size: 12)); Slider(value: $model.width,in: 1...24).frame(width: 72).accessibilityLabel(tr("Stroke width", "Толщина линии"))
+                        .toolbarTip(controller.tips, tr("Stroke width", "Толщина линии"))
                     if [.rectangle,.ellipse].contains(model.tool) || selectedTool == .rectangle || selectedTool == .ellipse {
-                        Toggle(tr("Fill", "Заливка"),isOn: $model.filled).toggleStyle(.button).font(.system(size: 11)).help(tr("Fill the shape with the selected color", "Залить фигуру выбранным цветом"))
+                        Toggle(tr("Fill", "Заливка"),isOn: $model.filled).toggleStyle(.button).font(.system(size: 11))
+                            .toolbarTip(controller.tips, tr("Fill", "Заливка"),detail: tr("Fill the shape with the selected color", "Залить фигуру выбранным цветом"))
                     }
                 }
                 Spacer(minLength: 2)
                 if model.ocrBusy { ProgressView().controlSize(.small) }
-                icon("text.viewfinder",tr("Recognize text", "Распознать текст")) { controller.onOCR?() }.disabled(model.ocrBusy)
-                icon("pin",tr("Pin above windows", "Закрепить поверх окон")) { controller.onPin?() }
-                icon("square.and.arrow.down",tr("Save…", "Сохранить…")) { controller.onSave?() }
+                icon("text.viewfinder",tr("Recognize text", "Распознать текст"),tooltip: tr("Extract text from the screenshot", "Извлечь текст из снимка")) { controller.onOCR?() }.disabled(model.ocrBusy)
+                icon("pin",tr("Pin above windows", "Закрепить поверх окон"),tooltip: tr("Keep the finished screenshot visible above other windows", "Оставить готовый снимок поверх других окон")) { controller.onPin?() }
+                icon("square.and.arrow.down",tr("Save…", "Сохранить…"),tooltip: tr("Save the finished screenshot to a file (⌘S)", "Сохранить готовый снимок в файл (⌘S)")) { controller.onSave?() }
                 Button { controller.onCopy?() } label: {
                     Label(tr("Copy", "Копировать"),systemImage: "doc.on.doc").font(.system(size: 12,weight: .semibold)).padding(.horizontal,6).padding(.vertical,4)
-                }.buttonStyle(.borderedProminent).controlSize(.small).help(tr("Copy the finished image and close the editor (⌘C)", "Скопировать готовый снимок и закрыть редактор (⌘C)"))
+                }.buttonStyle(.borderedProminent).controlSize(.small)
+                    .toolbarTip(controller.tips, tr("Copy", "Копировать"),detail: tr("Copy the finished image and close the editor (⌘C)", "Скопировать готовый снимок и закрыть редактор (⌘C)"))
             }
         }.padding(12).frame(maxWidth: .infinity).tint(.blue)
             .onChange(of: model.color) { model.applyStyle() }
