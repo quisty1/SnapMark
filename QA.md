@@ -76,5 +76,5 @@ The final `.app` is signed and its screen-capture permission is enabled at its c
 - Default stroke width is now 12 px (approximately the middle of the 1–24 range) in both the editor defaults and annotation model.
 - Added localized hover help to remaining buttons, shape fill, sliders, preferences, OCR actions, confirmation buttons and export format selection. Drawing tools now explain their interactions.
 - Re-ran `./scripts/test.sh` after the move and code changes: exit 0, all 25 checks passed.
-- Public source repository: https://github.com/quisty1/SnapMark . Application Support history and screenshots are excluded from publication.
+- Public source repository: https://github.com/quisty1/snap-mark . Application Support history and screenshots are excluded from publication.
 - A rebuilt ad-hoc app can require a refreshed Screen Recording permission; the previous 1.0 real capture checks remain documented above.

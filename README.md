@@ -1,18 +1,47 @@
 # SnapMark
 
-Нативный локальный скриншотер для macOS 14+ / Apple Silicon. Native, local screenshot utility for macOS 14+ / Apple Silicon.
+[English](#english) · [Русский](#русский)
 
-## Сборка из репозитория
+## English
+
+SnapMark captures a region, window or display on Apple Silicon Macs running macOS 14 or later. Annotate the result, extract text with on-device Vision OCR, save it, or pin it above other windows.
+
+### Build and open
+
+Install Swift 6.2 or later with the macOS Command Line Tools or Xcode, then run:
 
 ```sh
-git clone https://github.com/quisty1/SnapMark.git
-cd SnapMark
+git clone https://github.com/quisty1/snap-mark.git
+cd snap-mark
+./scripts/build-app.sh
+open dist/SnapMark.app
+```
+
+The script produces `SnapMark.app` and `SnapMark.zip` in `dist/`. The app is signed locally for personal use. Grant Screen Recording access on first capture; macOS may require you to reauthorize a rebuilt app. **Try the editor** opens a sample without screen access.
+
+### Capture and edit
+
+Press **⌃⇧2** or use the menu bar icon. Press **Space** to switch from region to window selection; use the menu for display capture. Add arrows, shapes, text, step numbers, blur, pixelation, or a solid mask, then press **⌘C** to copy or **⌘S** to save. PNG preserves transparency; JPEG uses a white background. **Esc** cancels, **⌘Z** undoes, and **⌘⇧Z** redoes.
+
+OCR processes the rendered, cropped image locally. Copying recognized text leaves the editor open; pinning finishes the edit. History saves only completed, flattened images, so earlier annotations cannot be removed in a reopened image. There are no accounts or cloud services. Regions stay within one display, and video or scrolling capture is outside the current scope.
+
+Run `./scripts/test.sh` for core and native checks. Native window and OCR checks require a graphical macOS session.
+
+## Русский
+
+Нативный локальный скриншотер для macOS 14+ / Apple Silicon.
+
+### Сборка из репозитория
+
+```sh
+git clone https://github.com/quisty1/snap-mark.git
+cd snap-mark
 ./scripts/build-app.sh
 ```
 
 Готовые `SnapMark.app` и `SnapMark.zip` появятся в `dist/`. Для сборки нужны Swift 6.2+ и Command Line Tools либо Xcode на Mac с Apple Silicon.
 
-## Запуск
+### Запуск
 
 1. Распакуй `SnapMark.zip` и перенеси `SnapMark.app` в папку «Программы» или другое постоянное место.
 2. Открой приложение. SnapMark работает через значок рамки в строке меню, без иконки в Dock.
@@ -22,7 +51,7 @@ cd SnapMark
 
 «Попробовать редактор» на стартовом экране открывает учебное изображение без разрешения на захват экрана.
 
-## Редактирование
+### Редактирование
 
 - Толщина линий по умолчанию — 12 пикселей, примерно середина шкалы 1–24. У кнопок и настроек есть подсказки при наведении на русском и английском.
 - Панель: выделение, перо, маркер, линия, стрелка, прямоугольник, эллипс, текст, номер шага, блюр, пикселизация, непрозрачная заливка, обрезка.
@@ -33,7 +62,7 @@ cd SnapMark
 - `Esc` закрывает захват/редактор без записи в историю. При активном текстовом поле сохраняются обычные сочетания для работы с текстом.
 - PNG сохраняет исходное разрешение и прозрачность. JPEG выбирается в диалоге сохранения и использует белую подложку для прозрачных областей.
 
-## OCR, закрепление и история
+### OCR, закрепление и история
 
 OCR обрабатывает итоговое изображение после обрезки и применения пометок/масок через системный Vision. Русский и английский распознаются локально при наличии поддержки в macOS. Копирование текста не закрывает редактор. Закрепление завершает редактирование и открывает готовое изображение поверх других окон; закреплённые окна можно перемещать, масштабировать, копировать и закрывать.
 
@@ -43,7 +72,7 @@ OCR обрабатывает итоговое изображение после 
 
 Первая версия не содержит сети, аккаунтов, облака, записи видео и длинных снимков с прокруткой. Область захвата ограничена одним дисплеем; окно снимается как отдельное окно, без перекрывающих его приложений. Незавершённые сеансы и закрепления не восстанавливаются после перезапуска. Сборка подписана локально для личного использования, без Developer ID / нотариализации.
 
-## Сборка и проверки
+### Сборка и проверки
 
 Нужны macOS 14+, Apple Silicon, Swift 6.2+ и Command Line Tools (`xcode-select --install`) либо Xcode. Зависимостей из сети нет.
 
@@ -55,17 +84,3 @@ OCR обрабатывает итоговое изображение после 
 `test.sh` запускает проверки модели/геометрии/рендера/реального файлового хранилища, затем нативные проверки жизненного цикла окон и настоящий Vision OCR. Для нативной части требуется графическая сессия macOS; окна проверки могут кратковременно появляться. Используется автономный Swift-раннер, поскольку поставка Command Line Tools может не содержать XCTest/Swift Testing. Любая проваленная проверка возвращает ненулевой код.
 
 Пакет собирается через Swift Package Manager; `build-app.sh` создаёт и проверяет локальную подпись `.app`, создаёт иконку и ZIP. Для разработки можно открыть `Package.swift` в Xcode. `SnapMarkCore` содержит модель, рендерер и историю; `SnapMark` — захват, холст, интерфейс и системные интеграции. Контрольные сценарии и результаты этой сборки перечислены в `QA.md`.
-
----
-
-## English quick start
-
-Unzip `SnapMark.zip`, move `SnapMark.app` to Applications or another permanent location, and open it. Use the menu-bar viewfinder icon or **Control–Shift–2** to capture an area. On first capture, grant Screen Recording access in **System Settings → Privacy & Security**, then retry or relaunch if macOS requests it. If SnapMark is missing from the list, use the + button to add the current SnapMark.app. A rebuilt ad-hoc app may require removing its old permission entry and adding the new app again. **Try the editor** opens a sample image without screen-capture permission.
-
-Space switches to window selection. Display capture is available in the menu. Choose a tool, annotate, then **Command–C** to copy or **Command–S** to save and close. **Escape** cancels without creating a history entry. Undo/redo: **Command–Z / Command–Shift–Z**. Select an object to move or resize using its bottom-right handle; double-click text to edit. Scroll pans; Option–scroll or pinch zooms. Text fields retain normal text shortcuts.
-
-The lower toolbar changes color, width, font size/weight, fill or blur/pixelation intensity. PNG is the default; choose JPEG in the save dialog for an opaque white background. OCR runs locally on the rendered/cropped image, including masks. Copying recognized text leaves the editor open. Pinning opens a movable/resizable image above other windows and finishes the edit.
-
-Only completed, flattened images are stored in local history; originals and editable objects are never saved. Reopening history allows new annotations, while previous annotations cannot be removed. History defaults to 100 images and is adjustable in Settings. Language and appearance follow the system unless overridden. No network services, accounts or telemetry are included.
-
-Build with `./scripts/build-app.sh /absolute/output/path`; run checks with `./scripts/test.sh`. Requires Swift 6.2+, Command Line Tools or Xcode, and a graphical macOS session for native checks. This is an Apple Silicon personal-use build with an ad-hoc signature, not a notarized public release. Capture regions stay within one display. Unfinished edits and pinned windows do not survive relaunch.
